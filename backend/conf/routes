@@ -1,0 +1,26 @@
+# API
+GET     /api/health                 controllers.HealthController.ping
+
+# Notes
+GET     /api/notes                  controllers.NotesController.list(q: Option[String], categoryId: Option[Long], tagId: Option[Long])
+POST    /api/notes                  controllers.NotesController.create
+GET     /api/notes/:id              controllers.NotesController.get(id: Long)
+PUT     /api/notes/:id              controllers.NotesController.update(id: Long)
+DELETE  /api/notes/:id              controllers.NotesController.delete(id: Long)
+
+# Categories
+GET     /api/categories             controllers.CategoriesController.list
+POST    /api/categories             controllers.CategoriesController.create
+PUT     /api/categories/:id         controllers.CategoriesController.update(id: Long)
+DELETE  /api/categories/:id         controllers.CategoriesController.delete(id: Long)
+
+# Tags
+GET     /api/tags                   controllers.TagsController.list
+POST    /api/tags                   controllers.TagsController.create
+PUT     /api/tags/:id               controllers.TagsController.update(id: Long)
+DELETE  /api/tags/:id               controllers.TagsController.delete(id: Long)
+
+# SPA (production build). React build should be copied to backend/public.
+GET     /assets/*file               controllers.Assets.at(path="/public", file)
+GET     /                           controllers.SpaController.index(path = "")
+GET     /*path                      controllers.SpaController.index(path)

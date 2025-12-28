@@ -1,0 +1,7 @@
+/backend/data
+/frontend/node_modules
+/backend/target
+/backend/.bsp
+/backend/.idea
+/backend/project/target
+/backend/project/project/target
