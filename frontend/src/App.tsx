@@ -344,6 +344,7 @@ export default function App() {
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageTagsOpen, setManageTagsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [newNoteDialogOpen, setNewNoteDialogOpen] = useState(false);
 
   const selectedNote = useMemo(
     () => notes.find((n) => n.id === selectedNoteId) ?? null,
@@ -392,9 +393,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCategoryId, filterTagId, search]);
 
-  async function createEmptyNote() {
+  async function createNoteWithTitle(title: string) {
     const created = await api.createNote({
-      title: "Untitled",
+      title: title.trim(),
       content: "",
       categoryIds: [],
       tagIds: []
@@ -418,6 +419,12 @@ export default function App() {
   }
 
   const activeFiltersCount = [filterCategoryId, filterTagId].filter(Boolean).length + (search.trim() ? 1 : 0);
+
+  function handleBackgroundClick(e: React.MouseEvent) {
+    if (e.target === e.currentTarget) {
+      setSelectedNoteId(null);
+    }
+  }
 
   return (
     <Box
@@ -457,14 +464,14 @@ export default function App() {
               </IconButton>
             </Tooltip>
           </Badge>
-          <Button color="inherit" startIcon={<AddIcon />} onClick={() => createEmptyNote()} variant="outlined">
+          <Button color="inherit" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)} variant="outlined">
             New note
           </Button>
         </Toolbar>
         {loading ? <LinearProgress color="secondary" /> : null}
       </AppBar>
 
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Container maxWidth="xl" sx={{ py: 4 }} onClick={handleBackgroundClick}>
         <Stack spacing={3}>
           <Paper
             elevation={0}
@@ -504,7 +511,7 @@ export default function App() {
                   </Box>
                 </Stack>
                 <Stack direction="row" spacing={1}>
-                  <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={() => createEmptyNote()}>
+                  <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)}>
                     New note
                   </Button>
                   <Button fullWidth variant="outlined" onClick={() => reloadAll()} startIcon={<RefreshIcon />}>
@@ -545,7 +552,7 @@ export default function App() {
                 }}
               />
 
-              <Paper sx={{ p: 2.5, ...glassPaper, maxHeight: "calc(100vh - 360px)", overflow: "auto" }} elevation={0}>
+              <Paper sx={{ p: 2.5, ...glassPaper, maxHeight: "calc(100vh - 360px)", overflow: "auto" }} elevation={0} onClick={handleBackgroundClick}>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
                   <Avatar sx={{ bgcolor: "primary.main" }}>
                     <NoteAltIcon />
@@ -554,7 +561,7 @@ export default function App() {
                   <Chip label={notes.length} size="small" />
                   <Box sx={{ flexGrow: 1 }} />
                   <Tooltip title="Create a new blank note">
-                    <IconButton color="primary" onClick={() => createEmptyNote()} aria-label="create note">
+                    <IconButton color="primary" onClick={() => setNewNoteDialogOpen(true)} aria-label="create note">
                       <AddIcon />
                     </IconButton>
                   </Tooltip>
@@ -593,7 +600,7 @@ export default function App() {
                     <Typography color="text.secondary">
                       Choose a note from the left or start a brand-new one to see it here.
                     </Typography>
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => createEmptyNote()}>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)}>
                       Create note
                     </Button>
                   </Stack>
@@ -645,6 +652,15 @@ export default function App() {
           await reloadNotes();
         }}
       />
+
+      <NewNoteDialog
+        open={newNoteDialogOpen}
+        onClose={() => setNewNoteDialogOpen(false)}
+        onCreate={async (title) => {
+          await createNoteWithTitle(title);
+          setNewNoteDialogOpen(false);
+        }}
+      />
     </Box>
   );
 }
@@ -674,7 +690,7 @@ function NoteEditor(props: {
     setError(null);
     try {
       await props.onSave({
-        title: title.trim() || "Untitled",
+        title: title.trim(),
         content,
         categoryIds: cats.map((c) => c.id),
         tagIds: tgs.map((t) => t.id)
@@ -694,6 +710,8 @@ function NoteEditor(props: {
           label="Title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          error={!title.trim()}
+          helperText={!title.trim() ? "Title is required" : undefined}
           InputProps={{
             startAdornment: <InputAdornment position="start"><NoteAltIcon color="primary" /></InputAdornment>
           }}
@@ -703,7 +721,7 @@ function NoteEditor(props: {
           <Button
             variant="contained"
             startIcon={<SaveIcon />}
-            disabled={busy || !dirty}
+            disabled={busy || !dirty || !title.trim()}
             onClick={save}
           >
             Save
@@ -777,5 +795,68 @@ function NoteEditor(props: {
         ) : null}
       </Stack>
     </Stack>
+  );
+}
+
+function NewNoteDialog(props: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (title: string) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (props.open) {
+      setTitle("");
+      setError(null);
+    }
+  }, [props.open]);
+
+  async function submit() {
+    if (!title.trim()) {
+      setError("Please enter a title before creating a note.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await props.onCreate(title.trim());
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={props.open} onClose={props.onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Create a note</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus
+          fullWidth
+          label="Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="e.g. Meeting notes"
+          margin="dense"
+        />
+        {error ? (
+          <Typography variant="caption" color="error">
+            {error}
+          </Typography>
+        ) : null}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={props.onClose} disabled={busy}>
+          Cancel
+        </Button>
+        <Button onClick={submit} variant="contained" disabled={busy || !title.trim()} startIcon={<AddIcon />}>
+          Create
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

@@ -8,12 +8,16 @@ import slick.jdbc.JdbcProfile
 import org.flywaydb.core.Flyway
 
 import java.nio.file.{Files, Paths}
+import scala.concurrent.ExecutionContext
+import repo.DbSupport
 
 final class NotesModule extends AbstractModule {
 
   override def configure(): Unit = {
     // Eagerly run migrations on app startup.
     bind(classOf[FlywayMigrator]).asEagerSingleton()
+    // Warm up the database connection so the first request is fast.
+    bind(classOf[DatabaseWarmup]).asEagerSingleton()
   }
 
   @Provides
@@ -41,4 +45,12 @@ final class FlywayMigrator @Inject() (configuration: Configuration) {
     .baselineOnMigrate(true)
     .load()
     .migrate()
+}
+
+@Singleton
+final class DatabaseWarmup @Inject() (dbs: DbSupport)(using ec: ExecutionContext) {
+  import dbs.profile.api.*
+
+  private val warmup = dbs.db.run(sql"select 1".as[Int].headOption).map(_ => ())(using ec)
+  warmup.failed.foreach(_ => ())(using ec)
 }
