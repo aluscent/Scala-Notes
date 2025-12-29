@@ -135,9 +135,12 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
 
   private def replaceNoteTags(noteId: Long, tagIds: Seq[Long]): DBIO[Int] = {
     val normalized = tagIds.distinct
+    val insertAction: DBIO[Option[Int]] =
+      if (normalized.isEmpty) DBIO.successful(Some(0))
+      else notesTables.noteTags ++= normalized.map(tid => (noteId, tid))
     for {
       _ <- notesTables.noteTags.filter(_.noteId === noteId).delete
-      inserted <- notesTables.noteTags ++= normalized.map(tid => (noteId, tid))
+      inserted <- insertAction
     } yield inserted.getOrElse(0)
   }
 
