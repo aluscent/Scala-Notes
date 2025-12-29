@@ -149,7 +149,7 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
     else {
       val q =
         notesTables.noteCategories
-          .filter(x => noteIds.contains(x._1))
+          .filter(x => noteIds.contains(x.noteId))
           .join(notesTables.categories)
           .on((a, b) => a.categoryId === b.id)
           .map { case (nc, c) => (nc.noteId, c.id, c.name) }
@@ -166,7 +166,7 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
     else {
       val q =
         notesTables.noteTags
-          .filter(x => noteIds.contains(x._1))
+          .filter(x => noteIds.contains(x.tagId))
           .join(notesTables.tags)
           .on((a, b) => a.tagId === b.id)
           .map { case (nt, tag) => (nt.noteId, tag.id, tag.name) }
