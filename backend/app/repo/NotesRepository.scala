@@ -149,7 +149,7 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
           .filter(x => noteIds.contains(x._1))
           .join(notesTables.categories)
           .on((a, b) => a.categoryId === b.id)
-          .map { case (nc, c) => (nc.categoryId, c.id, c.name) }
+          .map { case (nc, c) => (nc.noteId, c.id, c.name) }
           .result
 
       q.map { rows =>
@@ -166,7 +166,7 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
           .filter(x => noteIds.contains(x._1))
           .join(notesTables.tags)
           .on((a, b) => a.tagId === b.id)
-          .map { case (nt, tag) => (nt.tagId, tag.id, tag.name) }
+          .map { case (nt, tag) => (nt.noteId, tag.id, tag.name) }
           .result
 
       q.map { rows =>
