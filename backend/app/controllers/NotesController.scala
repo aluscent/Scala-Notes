@@ -30,36 +30,40 @@ final class NotesController @Inject() (
   def create: Action[JsValue] = Action(parse.json).async { req =>
     req.body.validate[CreateOrUpdateNoteRequest].fold(
       errs => Future.successful(BadRequest(JsError.toJson(errs))),
-      body =>
-        repo
-          .create(
-            title = body.title.trim,
-            content = body.content,
-            categoryIds = body.categoryIds,
-            tagIds = body.tagIds
-          )
-          .map(note => Created(Json.toJson(note)))
-          .recover { case t => ApiErrorHandling.mapDbException(t) }
+      body => validateTitle(body.title) match
+        case Left(err) => Future.successful(err)
+        case Right(cleanTitle) =>
+          repo
+            .create(
+              title = cleanTitle,
+              content = body.content,
+              categoryIds = body.categoryIds,
+              tagIds = body.tagIds
+            )
+            .map(note => Created(Json.toJson(note)))
+            .recover { case t => ApiErrorHandling.mapDbException(t) }
     )
   }
 
   def update(id: Long): Action[JsValue] = Action(parse.json).async { req =>
     req.body.validate[CreateOrUpdateNoteRequest].fold(
       errs => Future.successful(BadRequest(JsError.toJson(errs))),
-      body =>
-        repo
-          .update(
-            id = id,
-            title = body.title.trim,
-            content = body.content,
-            categoryIds = body.categoryIds,
-            tagIds = body.tagIds
-          )
-          .map {
-            case None => NotFound
-            case Some(note) => Ok(Json.toJson(note))
-          }
-          .recover { case t => ApiErrorHandling.mapDbException(t) }
+      body => validateTitle(body.title) match
+        case Left(err) => Future.successful(err)
+        case Right(cleanTitle) =>
+          repo
+            .update(
+              id = id,
+              title = cleanTitle,
+              content = body.content,
+              categoryIds = body.categoryIds,
+              tagIds = body.tagIds
+            )
+            .map {
+              case None => NotFound
+              case Some(note) => Ok(Json.toJson(note))
+            }
+            .recover { case t => ApiErrorHandling.mapDbException(t) }
     )
   }
 
@@ -68,5 +72,11 @@ final class NotesController @Inject() (
       case true => NoContent
       case false => NotFound
     }
+  }
+
+  private def validateTitle(title: String): Either[Result, String] = {
+    val clean = title.trim
+    if clean.isEmpty then Left(BadRequest(Json.obj("error" -> "Title cannot be empty")))
+    else Right(clean)
   }
 }

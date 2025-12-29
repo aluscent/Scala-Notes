@@ -135,9 +135,12 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
 
   private def replaceNoteTags(noteId: Long, tagIds: Seq[Long]): DBIO[Int] = {
     val normalized = tagIds.distinct
+    val insertAction: DBIO[Option[Int]] =
+      if (normalized.isEmpty) DBIO.successful(Some(0))
+      else notesTables.noteTags ++= normalized.map(tid => (noteId, tid))
     for {
       _ <- notesTables.noteTags.filter(_.noteId === noteId).delete
-      inserted <- notesTables.noteTags ++= normalized.map(tid => (noteId, tid))
+      inserted <- insertAction
     } yield inserted.getOrElse(0)
   }
 
@@ -146,10 +149,10 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
     else {
       val q =
         notesTables.noteCategories
-          .filter(x => noteIds.contains(x._1))
+          .filter(_.noteId inSetBind noteIds)
           .join(notesTables.categories)
           .on((a, b) => a.categoryId === b.id)
-          .map { case (nc, c) => (nc.categoryId, c.id, c.name) }
+          .map { case (nc, c) => (nc.noteId, c.id, c.name) }
           .result
 
       q.map { rows =>
@@ -163,10 +166,10 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
     else {
       val q =
         notesTables.noteTags
-          .filter(x => noteIds.contains(x._1))
+          .filter(_.noteId inSetBind noteIds)
           .join(notesTables.tags)
           .on((a, b) => a.tagId === b.id)
-          .map { case (nt, tag) => (nt.tagId, tag.id, tag.name) }
+          .map { case (nt, tag) => (nt.noteId, tag.id, tag.name) }
           .result
 
       q.map { rows =>

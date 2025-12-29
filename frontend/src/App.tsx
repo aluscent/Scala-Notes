@@ -2,23 +2,27 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   AppBar,
   Autocomplete,
+  Avatar,
+  Badge,
   Box,
   Button,
   Chip,
+  Container,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
-  Drawer,
   IconButton,
+  InputAdornment,
+  LinearProgress,
   List,
   ListItem,
-  ListItemButton,
-  ListItemText,
+  Paper,
   Stack,
   TextField,
   Toolbar,
+  Tooltip,
   Typography
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -27,10 +31,21 @@ import SaveIcon from "@mui/icons-material/Save";
 import LabelIcon from "@mui/icons-material/Label";
 import FolderIcon from "@mui/icons-material/Folder";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import SearchIcon from "@mui/icons-material/Search";
+import FilterAltIcon from "@mui/icons-material/FilterAlt";
+import ClearAllIcon from "@mui/icons-material/ClearAll";
+import NoteAltIcon from "@mui/icons-material/NoteAlt";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 
 import { api, Category, Note, NoteUpsert, Tag } from "./api";
 
-const drawerWidth = 320;
+const glassPaper = {
+  backdropFilter: "blur(14px)",
+  background: "rgba(255,255,255,0.82)",
+  border: "1px solid",
+  borderColor: "divider"
+};
 
 type EntityKind = "category" | "tag";
 
@@ -150,9 +165,169 @@ function EntityRow(props: {
           sx={{ width: "100%" }}
         />
       ) : (
-        <ListItemText primary={props.name} />
+        <Typography>{props.name}</Typography>
       )}
     </ListItem>
+  );
+}
+
+function NotePreviewCard(props: {
+  note: Note;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const snippet = props.note.content?.trim()?.replace(/\n+/g, " ") || "No content yet";
+
+  return (
+    <Paper
+      onClick={props.onSelect}
+      variant="outlined"
+      sx={{
+        p: 2,
+        cursor: "pointer",
+        borderColor: props.selected ? "primary.main" : "divider",
+        boxShadow: props.selected ? 6 : 1,
+        transition: "transform 120ms ease, box-shadow 120ms ease",
+        transform: props.selected ? "translateY(-2px)" : "none",
+        bgcolor: props.selected ? "primary.light" : "background.paper",
+        "&:hover": { boxShadow: 4, transform: "translateY(-2px)" }
+      }}
+    >
+      <Stack spacing={1}>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <NoteAltIcon color={props.selected ? "inherit" : "primary"} />
+          <Typography variant="subtitle1" noWrap>
+            {props.note.title || "Untitled"}
+          </Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          <Tooltip title="Last updated">
+            <Stack direction="row" alignItems="center" spacing={0.5}>
+              <CalendarTodayIcon fontSize="inherit" sx={{ color: "text.secondary" }} />
+              <Typography variant="caption" color="text.secondary">
+                {new Date(props.note.updatedAt).toLocaleDateString()}
+              </Typography>
+            </Stack>
+          </Tooltip>
+        </Stack>
+
+        <Typography variant="body2" color="text.secondary" noWrap>
+          {snippet || "No content yet."}
+        </Typography>
+
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+          {props.note.categories.map((c) => (
+            <Chip
+              key={`cat-${c.id}`}
+              size="small"
+              icon={<FolderIcon fontSize="small" />}
+              label={c.name}
+              color="primary"
+              variant="outlined"
+            />
+          ))}
+          {props.note.tags.map((t) => (
+            <Chip key={`tag-${t.id}`} size="small" icon={<LabelIcon fontSize="small" />} label={t.name} />
+          ))}
+        </Stack>
+      </Stack>
+    </Paper>
+  );
+}
+
+function FilterPanel(props: {
+  categories: Category[];
+  tags: Tag[];
+  filterCategoryId: number | null;
+  filterTagId: number | null;
+  search: string;
+  onSearchChange: (v: string) => void;
+  onCategoryChange: (id: number | null) => void;
+  onTagChange: (id: number | null) => void;
+  onManageCategories: () => void;
+  onManageTags: () => void;
+  onClearFilters: () => void;
+}) {
+  const filtersActive = Boolean(props.search.trim() || props.filterCategoryId || props.filterTagId);
+
+  return (
+    <Paper sx={{ p: 2.5, ...glassPaper }} elevation={0}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+        <Avatar sx={{ bgcolor: "primary.main" }}>
+          <FilterAltIcon />
+        </Avatar>
+        <Box>
+          <Typography variant="subtitle1">Filters</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Narrow down notes with smart filters.
+          </Typography>
+        </Box>
+        <Box sx={{ flexGrow: 1 }} />
+        <Tooltip title="Clear search and filters">
+          <span>
+            <IconButton onClick={props.onClearFilters} disabled={!filtersActive} aria-label="clear filters">
+              <ClearAllIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Stack>
+
+      <TextField
+        fullWidth
+        placeholder="Search by title or content"
+        value={props.search}
+        onChange={(e) => props.onSearchChange(e.target.value)}
+        InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
+        sx={{ mb: 2 }}
+      />
+
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
+        Categories
+      </Typography>
+      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+        <Chip
+          label="All"
+          variant={props.filterCategoryId === null ? "filled" : "outlined"}
+          color="primary"
+          onClick={() => props.onCategoryChange(null)}
+          icon={<FolderIcon fontSize="small" />}
+        />
+        {props.categories.map((c) => (
+          <Chip
+            key={c.id}
+            label={c.name}
+            onClick={() => props.onCategoryChange(c.id)}
+            color={props.filterCategoryId === c.id ? "primary" : "default"}
+            variant={props.filterCategoryId === c.id ? "filled" : "outlined"}
+            icon={<FolderIcon fontSize="small" />}
+          />
+        ))}
+        <Button size="small" onClick={props.onManageCategories} startIcon={<AddIcon />}>Manage</Button>
+      </Stack>
+
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: "block" }}>
+        Tags
+      </Typography>
+      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+        <Chip
+          label="All"
+          variant={props.filterTagId === null ? "filled" : "outlined"}
+          color="secondary"
+          onClick={() => props.onTagChange(null)}
+          icon={<LabelIcon fontSize="small" />}
+        />
+        {props.tags.map((t) => (
+          <Chip
+            key={t.id}
+            label={t.name}
+            onClick={() => props.onTagChange(t.id)}
+            color={props.filterTagId === t.id ? "secondary" : "default"}
+            variant={props.filterTagId === t.id ? "filled" : "outlined"}
+            icon={<LabelIcon fontSize="small" />}
+          />
+        ))}
+        <Button size="small" onClick={props.onManageTags} startIcon={<AddIcon />}>Manage</Button>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -168,6 +343,8 @@ export default function App() {
 
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageTagsOpen, setManageTagsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [newNoteDialogOpen, setNewNoteDialogOpen] = useState(false);
 
   const selectedNote = useMemo(
     () => notes.find((n) => n.id === selectedNoteId) ?? null,
@@ -175,21 +352,31 @@ export default function App() {
   );
 
   async function reloadAll() {
-    const [cats, tgs] = await Promise.all([api.listCategories(), api.listTags()]);
-    setCategories(cats);
-    setTags(tgs);
-    await reloadNotes({ categories: cats, tags: tgs });
+    setLoading(true);
+    try {
+      const [cats, tgs] = await Promise.all([api.listCategories(), api.listTags()]);
+      setCategories(cats);
+      setTags(tgs);
+      await reloadNotes({ categories: cats, tags: tgs, silent: true });
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function reloadNotes(_?: { categories?: Category[]; tags?: Tag[] }) {
-    const list = await api.listNotes({
-      q: search.trim() ? search.trim() : undefined,
-      categoryId: filterCategoryId ?? undefined,
-      tagId: filterTagId ?? undefined
-    });
-    setNotes(list);
-    if (selectedNoteId && !list.some((n) => n.id === selectedNoteId)) {
-      setSelectedNoteId(list[0]?.id ?? null);
+  async function reloadNotes(_?: { categories?: Category[]; tags?: Tag[]; silent?: boolean }) {
+    if (!_?.silent) setLoading(true);
+    try {
+      const list = await api.listNotes({
+        q: search.trim() ? search.trim() : undefined,
+        categoryId: filterCategoryId ?? undefined,
+        tagId: filterTagId ?? undefined
+      });
+      setNotes(list);
+      if (selectedNoteId && !list.some((n) => n.id === selectedNoteId)) {
+        setSelectedNoteId(list[0]?.id ?? null);
+      }
+    } finally {
+      if (!_?.silent) setLoading(false);
     }
   }
 
@@ -206,9 +393,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCategoryId, filterTagId, search]);
 
-  async function createEmptyNote() {
+  async function createNoteWithTitle(title: string) {
     const created = await api.createNote({
-      title: "Untitled",
+      title: title.trim(),
       content: "",
       categoryIds: [],
       tagIds: []
@@ -231,149 +418,198 @@ export default function App() {
     setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
   }
 
+  const activeFiltersCount = [filterCategoryId, filterTagId].filter(Boolean).length + (search.trim() ? 1 : 0);
+
+  function handleBackgroundClick(e: React.MouseEvent) {
+    if (e.target === e.currentTarget) {
+      setSelectedNoteId(null);
+    }
+  }
+
   return (
-    <Box sx={{ display: "flex", height: "100vh" }}>
-      <AppBar position="fixed" elevation={0} sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
+    <Box
+      sx={{
+        minHeight: "100vh",
+        background: "radial-gradient(circle at 20% 20%, #f8f1ff 0, #e6eaff 25%, #f6f8ff 50%, #ffffff 100%)",
+        pb: 6
+      }}
+    >
+      <AppBar
+        position="sticky"
+        elevation={0}
+        sx={{
+          background: "rgba(15, 23, 42, 0.72)",
+          backdropFilter: "blur(12px)",
+          borderBottom: "1px solid",
+          borderColor: "rgba(255,255,255,0.1)"
+        }}
+      >
         <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Scala Notes
-          </Typography>
-
-          <TextField
-            size="small"
-            placeholder="Search by title"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            sx={{ width: 320, bgcolor: "background.paper", borderRadius: 2, mr: 1 }}
-          />
-
-          <IconButton color="inherit" onClick={() => reloadAll()} aria-label="refresh">
-            <RefreshIcon />
-          </IconButton>
-
-          <Button color="inherit" startIcon={<AddIcon />} onClick={() => createEmptyNote()}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Avatar sx={{ bgcolor: "secondary.main" }}>
+              <AutoAwesomeIcon />
+            </Avatar>
+            <Box>
+              <Typography variant="h6">Scala Notes</Typography>
+              <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.8)" }}>
+                Capture, organize, and revisit ideas beautifully.
+              </Typography>
+            </Box>
+          </Stack>
+          <Box sx={{ flexGrow: 1 }} />
+          <Badge color="secondary" badgeContent={activeFiltersCount || 0} invisible={!activeFiltersCount} sx={{ mr: 2 }}>
+            <Tooltip title="Reload everything">
+              <IconButton color="inherit" onClick={() => reloadAll()} aria-label="refresh">
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </Badge>
+          <Button color="inherit" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)} variant="outlined">
             New note
           </Button>
         </Toolbar>
+        {loading ? <LinearProgress color="secondary" /> : null}
       </AppBar>
 
-      <Drawer
-        variant="permanent"
-        sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: "border-box" }
-        }}
-      >
-        <Toolbar />
-        <Box sx={{ p: 2 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-            <FolderIcon fontSize="small" /> Categories
-          </Typography>
-
-          <List dense>
-            <ListItem disablePadding>
-              <ListItemButton selected={filterCategoryId === null} onClick={() => setFilterCategoryId(null)}>
-                <ListItemText primary="All categories" />
-              </ListItemButton>
-            </ListItem>
-            {categories.map((c) => (
-              <ListItem key={c.id} disablePadding>
-                <ListItemButton selected={filterCategoryId === c.id} onClick={() => setFilterCategoryId(c.id)}>
-                  <ListItemText primary={c.name} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-
-          <Button
-            fullWidth
-            variant="outlined"
-            sx={{ mt: 1 }}
-            onClick={() => setManageCategoriesOpen(true)}
-          >
-            Manage categories
-          </Button>
-
-          <Divider sx={{ my: 2 }} />
-
-          <Typography variant="subtitle2" sx={{ mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
-            <LabelIcon fontSize="small" /> Tags
-          </Typography>
-
-          <List dense>
-            <ListItem disablePadding>
-              <ListItemButton selected={filterTagId === null} onClick={() => setFilterTagId(null)}>
-                <ListItemText primary="All tags" />
-              </ListItemButton>
-            </ListItem>
-            {tags.map((t) => (
-              <ListItem key={t.id} disablePadding>
-                <ListItemButton selected={filterTagId === t.id} onClick={() => setFilterTagId(t.id)}>
-                  <ListItemText primary={t.name} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-
-          <Button fullWidth variant="outlined" sx={{ mt: 1 }} onClick={() => setManageTagsOpen(true)}>
-            Manage tags
-          </Button>
-        </Box>
-      </Drawer>
-
-      <Box component="main" sx={{ flexGrow: 1, p: 2, mt: 8 }}>
-        <Stack direction={{ xs: "column", lg: "row" }} spacing={2} sx={{ height: "calc(100vh - 96px)" }}>
-          <Box
+      <Container maxWidth="xl" sx={{ py: 4 }} onClick={handleBackgroundClick}>
+        <Stack spacing={3}>
+          <Paper
+            elevation={0}
             sx={{
-              width: { xs: "100%", lg: 420 },
-              border: "1px solid",
-              borderColor: "divider",
-              borderRadius: 3,
-              overflow: "hidden"
+              p: 3,
+              borderRadius: 4,
+              ...glassPaper,
+              background: "linear-gradient(135deg, #f8f1ff, #e0f2fe)",
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "2fr 1fr" },
+              gap: 3,
+              alignItems: "center"
             }}
           >
-            <Box sx={{ p: 2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Typography variant="subtitle1">Notes</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {notes.length}
+            <Stack spacing={1}>
+              <Typography variant="h4" fontWeight={700} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                Your ideas deserve a beautiful home.
               </Typography>
-            </Box>
-            <Divider />
-            <List dense sx={{ maxHeight: { xs: 320, lg: "100%" }, overflow: "auto" }}>
-              {notes.map((n) => (
-                <ListItem key={n.id} disablePadding>
-                  <ListItemButton selected={selectedNoteId === n.id} onClick={() => setSelectedNoteId(n.id)}>
-                    <ListItemText
-                      primary={n.title || "Untitled"}
-                      secondary={new Date(n.updatedAt).toLocaleString()}
-                      primaryTypographyProps={{ noWrap: true }}
-                      secondaryTypographyProps={{ noWrap: true }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Box>
+              <Typography variant="body1" color="text.secondary">
+                Explore notes with refined filters, manage categories & tags inline, and edit with confidence in a polished workspace.
+              </Typography>
+              <Stack direction="row" spacing={1}>
+                <Chip color="primary" label={`${notes.length} notes`} icon={<NoteAltIcon />} />
+                <Chip color="secondary" label={`${categories.length} categories`} icon={<FolderIcon />} />
+                <Chip color="default" label={`${tags.length} tags`} icon={<LabelIcon />} />
+              </Stack>
+            </Stack>
+            <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, ...glassPaper }}>
+              <Stack spacing={1.5}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Avatar sx={{ bgcolor: "primary.main" }}>
+                    <NoteAltIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="subtitle1">Quick actions</Typography>
+                    <Typography variant="body2" color="text.secondary">Jump back into work instantly.</Typography>
+                  </Box>
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)}>
+                    New note
+                  </Button>
+                  <Button fullWidth variant="outlined" onClick={() => reloadAll()} startIcon={<RefreshIcon />}>
+                    Refresh
+                  </Button>
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  Use the filters to quickly discover notes by category, tag, or keyword.
+                </Typography>
+              </Stack>
+            </Paper>
+          </Paper>
 
-          <Box sx={{ flexGrow: 1, border: "1px solid", borderColor: "divider", borderRadius: 3, p: 2 }}>
-            {selectedNote ? (
-              <NoteEditor
-                key={selectedNote.id}
-                note={selectedNote}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "360px 1fr" },
+              gap: 3,
+              alignItems: "stretch"
+            }}
+          >
+            <Stack spacing={2.5}>
+              <FilterPanel
                 categories={categories}
                 tags={tags}
-                onSave={saveNote}
-                onDelete={deleteSelectedNote}
+                filterCategoryId={filterCategoryId}
+                filterTagId={filterTagId}
+                search={search}
+                onSearchChange={setSearch}
+                onCategoryChange={setFilterCategoryId}
+                onTagChange={setFilterTagId}
+                onManageCategories={() => setManageCategoriesOpen(true)}
+                onManageTags={() => setManageTagsOpen(true)}
+                onClearFilters={() => {
+                  setSearch("");
+                  setFilterCategoryId(null);
+                  setFilterTagId(null);
+                }}
               />
-            ) : (
-              <Box sx={{ height: "100%", display: "grid", placeItems: "center" }}>
-                <Typography color="text.secondary">Select a note or create a new one.</Typography>
-              </Box>
-            )}
+
+              <Paper sx={{ p: 2.5, ...glassPaper, maxHeight: "calc(100vh - 360px)", overflow: "auto" }} elevation={0} onClick={handleBackgroundClick}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                  <Avatar sx={{ bgcolor: "primary.main" }}>
+                    <NoteAltIcon />
+                  </Avatar>
+                  <Typography variant="subtitle1">Notes</Typography>
+                  <Chip label={notes.length} size="small" />
+                  <Box sx={{ flexGrow: 1 }} />
+                  <Tooltip title="Create a new blank note">
+                    <IconButton color="primary" onClick={() => setNewNoteDialogOpen(true)} aria-label="create note">
+                      <AddIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+
+                <Stack spacing={1.5}>
+                  {notes.length === 0 ? (
+                    <Box sx={{ py: 4, textAlign: "center" }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No notes match your filters. Create one to get started!
+                      </Typography>
+                    </Box>
+                  ) : (
+                    notes.map((n) => (
+                      <NotePreviewCard key={n.id} note={n} selected={selectedNoteId === n.id} onSelect={() => setSelectedNoteId(n.id)} />
+                    ))
+                  )}
+                </Stack>
+              </Paper>
+            </Stack>
+
+            <Paper sx={{ p: 3, height: { xs: "auto", md: "calc(100vh - 230px)" }, ...glassPaper }} elevation={0}>
+              {selectedNote ? (
+                <NoteEditor
+                  key={selectedNote.id}
+                  note={selectedNote}
+                  categories={categories}
+                  tags={tags}
+                  onSave={saveNote}
+                  onDelete={deleteSelectedNote}
+                />
+              ) : (
+                <Box sx={{ height: "100%", display: "grid", placeItems: "center" }}>
+                  <Stack spacing={1} textAlign="center">
+                    <Typography variant="h6">Select or create a note</Typography>
+                    <Typography color="text.secondary">
+                      Choose a note from the left or start a brand-new one to see it here.
+                    </Typography>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)}>
+                      Create note
+                    </Button>
+                  </Stack>
+                </Box>
+              )}
+            </Paper>
           </Box>
         </Stack>
-      </Box>
+      </Container>
 
       <EntityManagerDialog
         open={manageCategoriesOpen}
@@ -416,6 +652,15 @@ export default function App() {
           await reloadNotes();
         }}
       />
+
+      <NewNoteDialog
+        open={newNoteDialogOpen}
+        onClose={() => setNewNoteDialogOpen(false)}
+        onCreate={async (title) => {
+          await createNoteWithTitle(title);
+          setNewNoteDialogOpen(false);
+        }}
+      />
     </Box>
   );
 }
@@ -445,7 +690,7 @@ function NoteEditor(props: {
     setError(null);
     try {
       await props.onSave({
-        title: title.trim() || "Untitled",
+        title: title.trim(),
         content,
         categoryIds: cats.map((c) => c.id),
         tagIds: tgs.map((t) => t.id)
@@ -459,68 +704,83 @@ function NoteEditor(props: {
 
   return (
     <Stack spacing={2} sx={{ height: "100%" }}>
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems="flex-start">
         <TextField
           fullWidth
           label="Title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          error={!title.trim()}
+          helperText={!title.trim() ? "Title is required" : undefined}
+          InputProps={{
+            startAdornment: <InputAdornment position="start"><NoteAltIcon color="primary" /></InputAdornment>
+          }}
         />
-        <Button
-          variant="contained"
-          startIcon={<SaveIcon />}
-          disabled={busy || !dirty}
-          onClick={save}
-        >
-          Save
-        </Button>
-        <IconButton color="error" disabled={busy} onClick={props.onDelete} aria-label="delete-note">
-          <DeleteIcon />
-        </IconButton>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {dirty ? <Chip color="secondary" label="Unsaved changes" /> : <Chip label="Saved" color="success" />}
+          <Button
+            variant="contained"
+            startIcon={<SaveIcon />}
+            disabled={busy || !dirty || !title.trim()}
+            onClick={save}
+          >
+            Save
+          </Button>
+          <Tooltip title="Delete this note">
+            <span>
+              <IconButton color="error" disabled={busy} onClick={props.onDelete} aria-label="delete-note">
+                <DeleteIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
       </Stack>
 
-      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-        <Autocomplete
-          multiple
-          options={props.categories}
-          value={cats}
-          onChange={(_, v) => setCats(v)}
-          getOptionLabel={(o) => o.name}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          renderInput={(params) => <TextField {...params} label="Categories" />}
-          renderTags={(value, getTagProps) =>
-            value.map((option, index) => (
-              <Chip label={option.name} {...getTagProps({ index })} key={option.id} />
-            ))
-          }
-          sx={{ flex: 1 }}
-        />
+      <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+          <Autocomplete
+            multiple
+            options={props.categories}
+            value={cats}
+            onChange={(_, v) => setCats(v)}
+            getOptionLabel={(o) => o.name}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderInput={(params) => <TextField {...params} label="Categories" />}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip label={option.name} {...getTagProps({ index })} key={option.id} />
+              ))
+            }
+            sx={{ flex: 1 }}
+          />
 
-        <Autocomplete
-          multiple
-          options={props.tags}
-          value={tgs}
-          onChange={(_, v) => setTgs(v)}
-          getOptionLabel={(o) => o.name}
-          isOptionEqualToValue={(a, b) => a.id === b.id}
-          renderInput={(params) => <TextField {...params} label="Tags" />}
-          renderTags={(value, getTagProps) =>
-            value.map((option, index) => (
-              <Chip label={option.name} {...getTagProps({ index })} key={option.id} />
-            ))
-          }
-          sx={{ flex: 1 }}
-        />
-      </Stack>
+          <Autocomplete
+            multiple
+            options={props.tags}
+            value={tgs}
+            onChange={(_, v) => setTgs(v)}
+            getOptionLabel={(o) => o.name}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderInput={(params) => <TextField {...params} label="Tags" />}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip label={option.name} {...getTagProps({ index })} key={option.id} />
+              ))
+            }
+            sx={{ flex: 1 }}
+          />
+        </Stack>
+      </Paper>
 
       <TextField
         label="Content"
         value={content}
         onChange={(e) => setContent(e.target.value)}
         multiline
-        minRows={10}
+        minRows={12}
         fullWidth
         sx={{ flexGrow: 1 }}
+        placeholder="Write your thoughts, tasks, and ideas here..."
       />
 
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: "auto" }}>
@@ -535,5 +795,68 @@ function NoteEditor(props: {
         ) : null}
       </Stack>
     </Stack>
+  );
+}
+
+function NewNoteDialog(props: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: (title: string) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (props.open) {
+      setTitle("");
+      setError(null);
+    }
+  }, [props.open]);
+
+  async function submit() {
+    if (!title.trim()) {
+      setError("Please enter a title before creating a note.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await props.onCreate(title.trim());
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={props.open} onClose={props.onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Create a note</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus
+          fullWidth
+          label="Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="e.g. Meeting notes"
+          margin="dense"
+        />
+        {error ? (
+          <Typography variant="caption" color="error">
+            {error}
+          </Typography>
+        ) : null}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={props.onClose} disabled={busy}>
+          Cancel
+        </Button>
+        <Button onClick={submit} variant="contained" disabled={busy || !title.trim()} startIcon={<AddIcon />}>
+          Create
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
