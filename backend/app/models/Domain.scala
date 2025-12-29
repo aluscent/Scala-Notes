@@ -4,6 +4,7 @@ import play.api.libs.json.*
 
 import java.time.Instant
 
+final case class User(id: Long, email: String)
 final case class Category(id: Long, name: String)
 final case class Tag(id: Long, name: String)
 
@@ -27,6 +28,10 @@ final case class CreateOrUpdateNoteRequest(
 
 final case class CreateOrUpdateNamedEntityRequest(name: String)
 
+final case class SignupRequest(email: String, password: String)
+final case class LoginRequest(email: String, password: String)
+final case class AuthResponse(user: User)
+
 // JSON
 object JsonCodecs {
   given Writes[Instant] = Writes { i => JsString(i.toString) }
@@ -40,7 +45,11 @@ object JsonCodecs {
   given OFormat[Category] = Json.format[Category]
   given OFormat[Tag] = Json.format[Tag]
   given OFormat[Note] = Json.format[Note]
+  given OFormat[User] = Json.format[User]
 
   given Reads[CreateOrUpdateNoteRequest] = Json.reads[CreateOrUpdateNoteRequest]
   given Reads[CreateOrUpdateNamedEntityRequest] = Json.reads[CreateOrUpdateNamedEntityRequest]
+  given Reads[SignupRequest] = Json.reads[SignupRequest]
+  given Reads[LoginRequest] = Json.reads[LoginRequest]
+  given Writes[AuthResponse] = Json.writes[AuthResponse]
 }

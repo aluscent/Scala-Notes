@@ -1,6 +1,13 @@
 # API
 GET     /api/health                 controllers.HealthController.ping
 
+# Auth
+POST    /api/auth/signup            controllers.AuthController.signup
+POST    /api/auth/login             controllers.AuthController.login
+GET     /api/auth/me                controllers.AuthController.me
+POST    /api/auth/logout            controllers.AuthController.logout
+GET     /api/auth/csrf              controllers.AuthController.csrf
+
 # Notes
 GET     /api/notes                  controllers.NotesController.list(q: Option[String], categoryId: Option[Long], tagId: Option[Long])
 POST    /api/notes                  controllers.NotesController.create
