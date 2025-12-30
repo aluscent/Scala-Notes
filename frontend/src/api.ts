@@ -21,10 +21,13 @@ export type NoteUpsert = {
 const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:9000";
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
+  const csrf = getCookie("csrfToken");
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(csrf ? { "Csrf-Token": csrf } : {}),
       ...(init?.headers ?? {})
     }
   });
@@ -47,6 +50,11 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => http<string>("/api/health"),
+  signup: (email: string, password: string) => http<{ user: { id: number; email: string } }>("/api/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }),
+  login: (email: string, password: string) => http<{ user: { id: number; email: string } }>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  me: () => http<{ user: { id: number; email: string } }>("/api/auth/me"),
+  logout: () => http<void>("/api/auth/logout", { method: "POST" }),
+  csrf: () => http<{ token: string }>("/api/auth/csrf"),
 
   listNotes: (params: { q?: string; categoryId?: number; tagId?: number }) => {
     const qs = new URLSearchParams();
@@ -75,3 +83,11 @@ export const api = {
     http<Tag>(`/api/tags/${id}`, { method: "PUT", body: JSON.stringify({ name }) }),
   deleteTag: (id: number) => http<void>(`/api/tags/${id}`, { method: "DELETE" })
 };
+
+function getCookie(name: string): string | undefined {
+  return document.cookie
+    .split(";")
+    .map((c) => c.trim())
+    .filter((c) => c.startsWith(`${name}=`))
+    .map((c) => decodeURIComponent(c.split("=", 2)[1]))[0];
+}

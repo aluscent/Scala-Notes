@@ -9,25 +9,27 @@ import scala.concurrent.{ExecutionContext, Future}
 import repo.NotesRepository
 import models.JsonCodecs.given
 import models.CreateOrUpdateNoteRequest
+import modules.{AuthedRequest, AuthenticatedAction}
 
 @Singleton
 final class NotesController @Inject() (
   cc: ControllerComponents,
-  repo: NotesRepository
+  repo: NotesRepository,
+  auth: AuthenticatedAction
 )(using ec: ExecutionContext) extends AbstractController(cc) {
 
-  def list(q: Option[String], categoryId: Option[Long], tagId: Option[Long]): Action[AnyContent] = Action.async {
-    repo.list(q, categoryId, tagId).map(notes => Ok(Json.toJson(notes)))
+  def list(q: Option[String], categoryId: Option[Long], tagId: Option[Long]): Action[AnyContent] = auth.async { req: AuthedRequest[AnyContent] =>
+    repo.list(req.user.id, q, categoryId, tagId).map(notes => Ok(Json.toJson(notes)))
   }
 
-  def get(id: Long): Action[AnyContent] = Action.async {
-    repo.get(id).map {
+  def get(id: Long): Action[AnyContent] = auth.async { req: AuthedRequest[AnyContent] =>
+    repo.get(req.user.id, id).map {
       case None => NotFound
       case Some(note) => Ok(Json.toJson(note))
     }
   }
 
-  def create: Action[JsValue] = Action(parse.json).async { req =>
+  def create: Action[JsValue] = auth(parse.json).async { req: AuthedRequest[JsValue] =>
     req.body.validate[CreateOrUpdateNoteRequest].fold(
       errs => Future.successful(BadRequest(JsError.toJson(errs))),
       body => validateTitle(body.title) match
@@ -35,6 +37,7 @@ final class NotesController @Inject() (
         case Right(cleanTitle) =>
           repo
             .create(
+              userId = req.user.id,
               title = cleanTitle,
               content = body.content,
               categoryIds = body.categoryIds,
@@ -45,7 +48,7 @@ final class NotesController @Inject() (
     )
   }
 
-  def update(id: Long): Action[JsValue] = Action(parse.json).async { req =>
+  def update(id: Long): Action[JsValue] = auth(parse.json).async { req: AuthedRequest[JsValue] =>
     req.body.validate[CreateOrUpdateNoteRequest].fold(
       errs => Future.successful(BadRequest(JsError.toJson(errs))),
       body => validateTitle(body.title) match
@@ -53,6 +56,7 @@ final class NotesController @Inject() (
         case Right(cleanTitle) =>
           repo
             .update(
+              userId = req.user.id,
               id = id,
               title = cleanTitle,
               content = body.content,
@@ -67,8 +71,8 @@ final class NotesController @Inject() (
     )
   }
 
-  def delete(id: Long): Action[AnyContent] = Action.async {
-    repo.delete(id).map {
+  def delete(id: Long): Action[AnyContent] = auth.async { req: AuthedRequest[AnyContent] =>
+    repo.delete(req.user.id, id).map {
       case true => NoContent
       case false => NotFound
     }

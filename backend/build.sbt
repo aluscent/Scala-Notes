@@ -19,7 +19,8 @@ lazy val root = (project in file("."))
       "com.typesafe.slick" %% "slick" % "3.6.1",
       "com.typesafe.slick" %% "slick-hikaricp" % "3.6.1",
       "com.h2database" % "h2" % "2.4.240",
-      "org.flywaydb" % "flyway-core" % "11.20.0"
+      "org.flywaydb" % "flyway-core" % "11.20.0",
+      "de.mkammerer" % "argon2-jvm" % "2.11"
     ),
     // Make JSON a first-class citizen in tests too.
     Test / javaOptions += "-Dconfig.resource=application.conf"
