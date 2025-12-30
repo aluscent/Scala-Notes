@@ -23,7 +23,10 @@ import {
   TextField,
   Toolbar,
   Tooltip,
-  Typography
+  Typography,
+  Tabs,
+  Tab,
+  Alert
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -332,6 +335,10 @@ function FilterPanel(props: {
 }
 
 export default function App() {
+  const [user, setUser] = useState<{ id: number; email: string } | null>(null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -352,6 +359,7 @@ export default function App() {
   );
 
   async function reloadAll() {
+    if (!user) return;
     setLoading(true);
     try {
       const [cats, tgs] = await Promise.all([api.listCategories(), api.listTags()]);
@@ -364,6 +372,7 @@ export default function App() {
   }
 
   async function reloadNotes(_?: { categories?: Category[]; tags?: Tag[]; silent?: boolean }) {
+    if (!user) return;
     if (!_?.silent) setLoading(true);
     try {
       const list = await api.listNotes({
@@ -381,17 +390,30 @@ export default function App() {
   }
 
   useEffect(() => {
-    void reloadAll();
+    void bootstrapAuth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    if (user) {
+      void reloadAll();
+    } else {
+      setNotes([]);
+      setCategories([]);
+      setTags([]);
+      setSelectedNoteId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
     const t = setTimeout(() => {
       void reloadNotes();
     }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCategoryId, filterTagId, search]);
+  }, [filterCategoryId, filterTagId, search, user]);
 
   async function createNoteWithTitle(title: string) {
     const created = await api.createNote({
@@ -416,6 +438,31 @@ export default function App() {
     if (!selectedNote) return;
     const updated = await api.updateNote(selectedNote.id, upsert);
     setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+  }
+
+  async function bootstrapAuth() {
+    try {
+      await api.csrf();
+      const me = await api.me();
+      setUser(me.user);
+      setAuthDialogOpen(false);
+    } catch {
+      setAuthDialogOpen(true);
+    }
+  }
+
+  async function handleAuth(email: string, password: string, mode: "login" | "signup") {
+    await api.csrf();
+    const res = mode === "login" ? await api.login(email, password) : await api.signup(email, password);
+    setUser(res.user);
+    setAuthDialogOpen(false);
+    await reloadAll();
+  }
+
+  async function handleLogout() {
+    await api.logout();
+    setUser(null);
+    setAuthDialogOpen(true);
   }
 
   const activeFiltersCount = [filterCategoryId, filterTagId].filter(Boolean).length + (search.trim() ? 1 : 0);
@@ -459,157 +506,197 @@ export default function App() {
           <Box sx={{ flexGrow: 1 }} />
           <Badge color="secondary" badgeContent={activeFiltersCount || 0} invisible={!activeFiltersCount} sx={{ mr: 2 }}>
             <Tooltip title="Reload everything">
-              <IconButton color="inherit" onClick={() => reloadAll()} aria-label="refresh">
+              <IconButton color="inherit" onClick={() => reloadAll()} aria-label="refresh" disabled={!user}>
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
           </Badge>
-          <Button color="inherit" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)} variant="outlined">
-            New note
-          </Button>
+          {user ? (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Chip
+                color="secondary"
+                label={user.email}
+                avatar={<Avatar>{user.email.charAt(0).toUpperCase()}</Avatar>}
+                sx={{ bgcolor: "rgba(255,255,255,0.12)" }}
+              />
+              <Button color="inherit" onClick={handleLogout}>
+                Log out
+              </Button>
+              <Button color="inherit" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)} variant="outlined">
+                New note
+              </Button>
+            </Stack>
+          ) : (
+            <Button color="inherit" variant="outlined" onClick={() => setAuthDialogOpen(true)}>
+              Sign in / Sign up
+            </Button>
+          )}
         </Toolbar>
         {loading ? <LinearProgress color="secondary" /> : null}
       </AppBar>
 
-      <Container maxWidth="xl" sx={{ py: 4 }} onClick={handleBackgroundClick}>
-        <Stack spacing={3}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 3,
-              borderRadius: 4,
-              ...glassPaper,
-              background: "linear-gradient(135deg, #f8f1ff, #e0f2fe)",
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "2fr 1fr" },
-              gap: 3,
-              alignItems: "center"
-            }}
-          >
-            <Stack spacing={1}>
-              <Typography variant="h4" fontWeight={700} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                Your ideas deserve a beautiful home.
+      {!user ? (
+        <Container maxWidth="md" sx={{ py: 10 }}>
+          <Paper elevation={0} sx={{ p: 4, borderRadius: 4, ...glassPaper }}>
+            <Stack spacing={2} alignItems="flex-start">
+              <Typography variant="h4" fontWeight={700}>
+                Welcome back! Please sign in to view your notes.
               </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Explore notes with refined filters, manage categories & tags inline, and edit with confidence in a polished workspace.
+              <Typography color="text.secondary">
+                Your notes are secured per account. Log in or create an account to access your personal categories, tags, and notes.
               </Typography>
               <Stack direction="row" spacing={1}>
-                <Chip color="primary" label={`${notes.length} notes`} icon={<NoteAltIcon />} />
-                <Chip color="secondary" label={`${categories.length} categories`} icon={<FolderIcon />} />
-                <Chip color="default" label={`${tags.length} tags`} icon={<LabelIcon />} />
+                <Button variant="contained" onClick={() => { setAuthMode("login"); setAuthDialogOpen(true); }}>
+                  Sign in
+                </Button>
+                <Button variant="outlined" onClick={() => { setAuthMode("signup"); setAuthDialogOpen(true); }}>
+                  Create account
+                </Button>
               </Stack>
             </Stack>
-            <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, ...glassPaper }}>
-              <Stack spacing={1.5}>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Avatar sx={{ bgcolor: "primary.main" }}>
-                    <NoteAltIcon />
-                  </Avatar>
-                  <Box>
-                    <Typography variant="subtitle1">Quick actions</Typography>
-                    <Typography variant="body2" color="text.secondary">Jump back into work instantly.</Typography>
-                  </Box>
-                </Stack>
-                <Stack direction="row" spacing={1}>
-                  <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)}>
-                    New note
-                  </Button>
-                  <Button fullWidth variant="outlined" onClick={() => reloadAll()} startIcon={<RefreshIcon />}>
-                    Refresh
-                  </Button>
-                </Stack>
-                <Typography variant="body2" color="text.secondary">
-                  Use the filters to quickly discover notes by category, tag, or keyword.
-                </Typography>
-              </Stack>
-            </Paper>
           </Paper>
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "360px 1fr" },
-              gap: 3,
-              alignItems: "stretch"
-            }}
-          >
-            <Stack spacing={2.5}>
-              <FilterPanel
-                categories={categories}
-                tags={tags}
-                filterCategoryId={filterCategoryId}
-                filterTagId={filterTagId}
-                search={search}
-                onSearchChange={setSearch}
-                onCategoryChange={setFilterCategoryId}
-                onTagChange={setFilterTagId}
-                onManageCategories={() => setManageCategoriesOpen(true)}
-                onManageTags={() => setManageTagsOpen(true)}
-                onClearFilters={() => {
-                  setSearch("");
-                  setFilterCategoryId(null);
-                  setFilterTagId(null);
-                }}
-              />
-
-              <Paper sx={{ p: 2.5, ...glassPaper, maxHeight: "calc(100vh - 360px)", overflow: "auto" }} elevation={0} onClick={handleBackgroundClick}>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-                  <Avatar sx={{ bgcolor: "primary.main" }}>
-                    <NoteAltIcon />
-                  </Avatar>
-                  <Typography variant="subtitle1">Notes</Typography>
-                  <Chip label={notes.length} size="small" />
-                  <Box sx={{ flexGrow: 1 }} />
-                  <Tooltip title="Create a new blank note">
-                    <IconButton color="primary" onClick={() => setNewNoteDialogOpen(true)} aria-label="create note">
-                      <AddIcon />
-                    </IconButton>
-                  </Tooltip>
+        </Container>
+      ) : (
+        <Container maxWidth="xl" sx={{ py: 4 }} onClick={handleBackgroundClick}>
+          <Stack spacing={3}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 4,
+                ...glassPaper,
+                background: "linear-gradient(135deg, #f8f1ff, #e0f2fe)",
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "2fr 1fr" },
+                gap: 3,
+                alignItems: "center"
+              }}
+            >
+              <Stack spacing={1}>
+                <Typography variant="h4" fontWeight={700} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  Your ideas deserve a beautiful home.
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  Explore notes with refined filters, manage categories & tags inline, and edit with confidence in a polished workspace.
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  <Chip color="primary" label={`${notes.length} notes`} icon={<NoteAltIcon />} />
+                  <Chip color="secondary" label={`${categories.length} categories`} icon={<FolderIcon />} />
+                  <Chip color="default" label={`${tags.length} tags`} icon={<LabelIcon />} />
                 </Stack>
-
+              </Stack>
+              <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, ...glassPaper }}>
                 <Stack spacing={1.5}>
-                  {notes.length === 0 ? (
-                    <Box sx={{ py: 4, textAlign: "center" }}>
-                      <Typography variant="body2" color="text.secondary">
-                        No notes match your filters. Create one to get started!
-                      </Typography>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Avatar sx={{ bgcolor: "primary.main" }}>
+                      <NoteAltIcon />
+                    </Avatar>
+                    <Box>
+                      <Typography variant="subtitle1">Quick actions</Typography>
+                      <Typography variant="body2" color="text.secondary">Jump back into work instantly.</Typography>
                     </Box>
-                  ) : (
-                    notes.map((n) => (
-                      <NotePreviewCard key={n.id} note={n} selected={selectedNoteId === n.id} onSelect={() => setSelectedNoteId(n.id)} />
-                    ))
-                  )}
-                </Stack>
-              </Paper>
-            </Stack>
-
-            <Paper sx={{ p: 3, height: { xs: "auto", md: "calc(100vh - 230px)" }, ...glassPaper }} elevation={0}>
-              {selectedNote ? (
-                <NoteEditor
-                  key={selectedNote.id}
-                  note={selectedNote}
-                  categories={categories}
-                  tags={tags}
-                  onSave={saveNote}
-                  onDelete={deleteSelectedNote}
-                />
-              ) : (
-                <Box sx={{ height: "100%", display: "grid", placeItems: "center" }}>
-                  <Stack spacing={1} textAlign="center">
-                    <Typography variant="h6">Select or create a note</Typography>
-                    <Typography color="text.secondary">
-                      Choose a note from the left or start a brand-new one to see it here.
-                    </Typography>
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)}>
-                      Create note
+                  </Stack>
+                  <Stack direction="row" spacing={1}>
+                    <Button fullWidth variant="contained" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)}>
+                      New note
+                    </Button>
+                    <Button fullWidth variant="outlined" onClick={() => reloadAll()} startIcon={<RefreshIcon />}>
+                      Refresh
                     </Button>
                   </Stack>
-                </Box>
-              )}
+                  <Typography variant="body2" color="text.secondary">
+                    Use the filters to quickly discover notes by category, tag, or keyword.
+                  </Typography>
+                </Stack>
+              </Paper>
             </Paper>
-          </Box>
-        </Stack>
-      </Container>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "360px 1fr" },
+                gap: 3,
+                alignItems: "stretch"
+              }}
+            >
+              <Stack spacing={2.5}>
+                <FilterPanel
+                  categories={categories}
+                  tags={tags}
+                  filterCategoryId={filterCategoryId}
+                  filterTagId={filterTagId}
+                  search={search}
+                  onSearchChange={setSearch}
+                  onCategoryChange={setFilterCategoryId}
+                  onTagChange={setFilterTagId}
+                  onManageCategories={() => setManageCategoriesOpen(true)}
+                  onManageTags={() => setManageTagsOpen(true)}
+                  onClearFilters={() => {
+                    setSearch("");
+                    setFilterCategoryId(null);
+                    setFilterTagId(null);
+                  }}
+                />
+
+                <Paper sx={{ p: 2.5, ...glassPaper, maxHeight: "calc(100vh - 360px)", overflow: "auto" }} elevation={0} onClick={handleBackgroundClick}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+                    <Avatar sx={{ bgcolor: "primary.main" }}>
+                      <NoteAltIcon />
+                    </Avatar>
+                    <Typography variant="subtitle1">Notes</Typography>
+                    <Chip label={notes.length} size="small" />
+                    <Box sx={{ flexGrow: 1 }} />
+                    <Tooltip title="Create a new blank note">
+                      <IconButton color="primary" onClick={() => setNewNoteDialogOpen(true)} aria-label="create note">
+                        <AddIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+
+                  <Stack spacing={1.5}>
+                    {notes.length === 0 ? (
+                      <Box sx={{ py: 4, textAlign: "center" }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No notes match your filters. Create one to get started!
+                        </Typography>
+                      </Box>
+                    ) : (
+                      notes.map((n) => (
+                        <NotePreviewCard key={n.id} note={n} selected={selectedNoteId === n.id} onSelect={() => setSelectedNoteId(n.id)} />
+                      ))
+                    )}
+                  </Stack>
+                </Paper>
+              </Stack>
+
+              <Paper sx={{ p: 3, height: { xs: "auto", md: "calc(100vh - 230px)" }, ...glassPaper }} elevation={0}>
+                {selectedNote ? (
+                  <NoteEditor
+                    key={selectedNote.id}
+                    note={selectedNote}
+                    categories={categories}
+                    tags={tags}
+                    onSave={saveNote}
+                    onDelete={deleteSelectedNote}
+                  />
+                ) : (
+                  <Box sx={{ height: "100%", display: "grid", placeItems: "center" }}>
+                    <Stack spacing={1} textAlign="center">
+                      <Typography variant="h6">Select or create a note</Typography>
+                      <Typography color="text.secondary">
+                        Choose a note from the left or start a brand-new one to see it here.
+                      </Typography>
+                      <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewNoteDialogOpen(true)}>
+                        Create note
+                      </Button>
+                    </Stack>
+                  </Box>
+                )}
+              </Paper>
+            </Box>
+          </Stack>
+        </Container>
+      )}
 
       <EntityManagerDialog
         open={manageCategoriesOpen}
@@ -660,6 +747,14 @@ export default function App() {
           await createNoteWithTitle(title);
           setNewNoteDialogOpen(false);
         }}
+      />
+
+      <AuthDialog
+        open={authDialogOpen}
+        mode={authMode}
+        onModeChange={setAuthMode}
+        onClose={() => setAuthDialogOpen(false)}
+        onSubmit={handleAuth}
       />
     </Box>
   );
@@ -855,6 +950,87 @@ function NewNoteDialog(props: {
         </Button>
         <Button onClick={submit} variant="contained" disabled={busy || !title.trim()} startIcon={<AddIcon />}>
           Create
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function AuthDialog(props: {
+  open: boolean;
+  mode: "login" | "signup";
+  onModeChange: (mode: "login" | "signup") => void;
+  onClose: () => void;
+  onSubmit: (email: string, password: string, mode: "login" | "signup") => Promise<void>;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (props.open) {
+      setEmail("");
+      setPassword("");
+      setError(null);
+    }
+  }, [props.open, props.mode]);
+
+  async function submit() {
+    if (!email.trim() || !password.trim()) {
+      setError("Please enter both email and password.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await props.onSubmit(email.trim(), password, props.mode);
+    } catch (e: any) {
+      setError(e?.message ?? "Unable to sign in right now.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={props.open} onClose={props.onClose} fullWidth maxWidth="xs">
+      <DialogTitle>{props.mode === "login" ? "Sign in" : "Create your account"}</DialogTitle>
+      <DialogContent>
+        <Tabs
+          value={props.mode}
+          onChange={(_, v) => props.onModeChange(v)}
+          variant="fullWidth"
+          sx={{ mb: 2 }}
+        >
+          <Tab label="Sign in" value="login" />
+          <Tab label="Sign up" value="signup" />
+        </Tabs>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            fullWidth
+            autoFocus
+          />
+          <TextField
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            fullWidth
+            helperText={props.mode === "signup" ? "At least 8 characters." : undefined}
+          />
+          {error ? <Alert severity="error">{error}</Alert> : null}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={props.onClose} disabled={busy}>
+          Cancel
+        </Button>
+        <Button onClick={submit} variant="contained" disabled={busy}>
+          {props.mode === "login" ? "Sign in" : "Sign up"}
         </Button>
       </DialogActions>
     </Dialog>
