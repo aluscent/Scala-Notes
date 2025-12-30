@@ -55,6 +55,7 @@ final class Tables(val profile: JdbcProfile) {
 
     def * = (id, userId, name).mapTo[CategoryRow]
     def nameIdx = index("UK_CATEGORIES_USER_NAME", (userId, name), unique = true)
+    def idOwnerIdx = index("UK_CATEGORIES_ID_USER", (id, userId), unique = true)
 
   }
 
@@ -67,6 +68,7 @@ final class Tables(val profile: JdbcProfile) {
 
     def * = (id, userId, name).mapTo[TagRow]
     def nameIdx = index("UK_TAGS_USER_NAME", (userId, name), unique = true)
+    def idOwnerIdx = index("UK_TAGS_ID_USER", (id, userId), unique = true)
 
   }
 

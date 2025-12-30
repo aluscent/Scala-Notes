@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS categories (
   user_id BIGINT NOT NULL,
   name VARCHAR(128) NOT NULL,
   CONSTRAINT fk_categories_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT uk_categories_user_name UNIQUE (user_id, name)
+  CONSTRAINT uk_categories_user_name UNIQUE (user_id, name),
+  CONSTRAINT uk_categories_id_user UNIQUE (id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -20,7 +21,8 @@ CREATE TABLE IF NOT EXISTS tags (
   user_id BIGINT NOT NULL,
   name VARCHAR(128) NOT NULL,
   CONSTRAINT fk_tags_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT uk_tags_user_name UNIQUE (user_id, name)
+  CONSTRAINT uk_tags_user_name UNIQUE (user_id, name),
+  CONSTRAINT uk_tags_id_user UNIQUE (id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS notes (
