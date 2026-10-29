@@ -5,3 +5,7 @@
 /backend/.idea
 /backend/project/target
 /backend/project/project/target
+/frontend/dist
+/frontend/*.tsbuildinfo
+/backend/public/*
+!/backend/public/.gitkeep

@@ -18,7 +18,7 @@ export type NoteUpsert = {
   tagIds: number[];
 };
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "http://localhost:9000";
+const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? "";
 
 async function http<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -48,8 +48,10 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => http<string>("/api/health"),
 
-  listNotes: (params: { q?: string; categoryId?: number; tagId?: number }) => {
+  listNotes: (params: { q?: string; categoryId?: number; tagId?: number; limit?: number; offset?: number }) => {
     const qs = new URLSearchParams();
+    if (params.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params.offset !== undefined) qs.set("offset", String(params.offset));
     if (params.q) qs.set("q", params.q);
     if (params.categoryId) qs.set("categoryId", String(params.categoryId));
     if (params.tagId) qs.set("tagId", String(params.tagId));

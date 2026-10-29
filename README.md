@@ -14,7 +14,7 @@ A note-taking web app:
 ## Prerequisites
 - Java 17+ (Play recommends at least Java 17) 
 - sbt
-- Node.js 18+ (recommended)
+- Node.js 22
 
 ## Run (dev)
 ### 1) Backend
@@ -27,7 +27,7 @@ Backend runs on `http://localhost:9000` by default.
 ### 2) Frontend
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 Frontend runs on `http://localhost:5173`.
@@ -39,25 +39,37 @@ On first startup, Flyway runs migrations and H2 creates a DB file in:
 - `backend/data/notesdb.mv.db`
 
 ## Production build (single server)
-1) Build the frontend:
-```bash
-cd frontend
-npm install
-npm run build
-```
 
-2) Copy the build into Play’s `public/` folder:
-```bash
-rm -rf ../backend/public
-mkdir -p ../backend/public
-cp -R dist/* ../backend/public/
-```
+From the repository root:
 
-3) Package and run the backend:
-```bash
-cd ../backend
+```sh
+node scripts/build-frontend.mjs
+cd backend
 sbt stage
 ./target/universal/stage/bin/notes-backend -Dhttp.port=9000
 ```
 
-Then open `http://localhost:9000/`.
+Then open `http://localhost:9000/`. Protect the application before sharing a writable demo.
+
+## Tested behavior and production packaging
+
+- Search matches title **or content**, case-insensitively. `%`, `_` and `!` are
+  literal text, not user-controlled SQL wildcards; Slick binds the value.
+- `GET /api/notes?limit=50&offset=0` returns at most 100 notes. Invalid limits or
+  negative offsets return 400. Ordering is updated time descending, then ID
+  descending for ties. The UI has Previous/Next controls and resets on filters.
+  Offset pages can shift when other users edit notes; this is not snapshot paging.
+- H2 repository tests exercise search, paging, category/tag normalization, rollback
+  on failed relationship updates, empty relationships and delete/get behavior.
+  Run `cd backend && sbt test`.
+
+Build the frontend with `node scripts/build-frontend.mjs` from the repository root,
+then `cd backend && sbt stage`. This installs locked dependencies, builds React,
+and copies the output into Play's public directory. `/assets/*` maps to that
+build's assets directory. Production API calls use the same origin; Vite proxies
+`/api` to localhost:9000 during development. Override `VITE_API_BASE` only when
+hosting the API separately. CI verifies the frontend build and backend tests.
+
+This application has unauthenticated write endpoints and a sample development
+secret. Keep it local or protect the whole application with an identity gateway
+before publishing a writable demo. It is not a multi-tenant hosted notes service.
