@@ -16,8 +16,10 @@ final class NotesController @Inject() (
   repo: NotesRepository
 )(using ec: ExecutionContext) extends AbstractController(cc) {
 
-  def list(q: Option[String], categoryId: Option[Long], tagId: Option[Long]): Action[AnyContent] = Action.async {
-    repo.list(q, categoryId, tagId).map(notes => Ok(Json.toJson(notes)))
+  def list(q: Option[String], categoryId: Option[Long], tagId: Option[Long], limit: Int, offset: Int): Action[AnyContent] = Action.async {
+    if (limit < 1 || limit > 100 || offset < 0)
+      Future.successful(BadRequest(Json.obj("error" -> "limit must be 1..100 and offset must be non-negative")))
+    else repo.list(q, categoryId, tagId, limit, offset).map(notes => Ok(Json.toJson(notes)))
   }
 
   def get(id: Long): Action[AnyContent] = Action.async {

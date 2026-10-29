@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppBar,
   Autocomplete,
@@ -334,6 +334,10 @@ function FilterPanel(props: {
 export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [listError, setListError] = useState<string | null>(null);
+  const requestVersion = useRef(0);
+  const pageSize = 50;
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
 
@@ -364,19 +368,26 @@ export default function App() {
   }
 
   async function reloadNotes(_?: { categories?: Category[]; tags?: Tag[]; silent?: boolean }) {
+    const version = ++requestVersion.current;
     if (!_?.silent) setLoading(true);
+    setListError(null);
     try {
       const list = await api.listNotes({
         q: search.trim() ? search.trim() : undefined,
         categoryId: filterCategoryId ?? undefined,
-        tagId: filterTagId ?? undefined
+        tagId: filterTagId ?? undefined,
+        limit: pageSize,
+        offset
       });
+      if (version !== requestVersion.current) return;
       setNotes(list);
       if (selectedNoteId && !list.some((n) => n.id === selectedNoteId)) {
         setSelectedNoteId(list[0]?.id ?? null);
       }
+    } catch (error) {
+      if (version === requestVersion.current) setListError(String(error));
     } finally {
-      if (!_?.silent) setLoading(false);
+      if (version === requestVersion.current && !_?.silent) setLoading(false);
     }
   }
 
@@ -386,12 +397,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    ++requestVersion.current;
     const t = setTimeout(() => {
       void reloadNotes();
     }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCategoryId, filterTagId, search]);
+  }, [filterCategoryId, filterTagId, search, offset]);
 
   async function createNoteWithTitle(title: string) {
     const created = await api.createNote({
@@ -494,7 +506,7 @@ export default function App() {
                 Explore notes with refined filters, manage categories & tags inline, and edit with confidence in a polished workspace.
               </Typography>
               <Stack direction="row" spacing={1}>
-                <Chip color="primary" label={`${notes.length} notes`} icon={<NoteAltIcon />} />
+                <Chip color="primary" label={`${notes.length} notes on this page`} icon={<NoteAltIcon />} />
                 <Chip color="secondary" label={`${categories.length} categories`} icon={<FolderIcon />} />
                 <Chip color="default" label={`${tags.length} tags`} icon={<LabelIcon />} />
               </Stack>
@@ -540,12 +552,13 @@ export default function App() {
                 filterCategoryId={filterCategoryId}
                 filterTagId={filterTagId}
                 search={search}
-                onSearchChange={setSearch}
-                onCategoryChange={setFilterCategoryId}
-                onTagChange={setFilterTagId}
+                onSearchChange={(value) => { setSearch(value); setOffset(0); }}
+                onCategoryChange={(value) => { setFilterCategoryId(value); setOffset(0); }}
+                onTagChange={(value) => { setFilterTagId(value); setOffset(0); }}
                 onManageCategories={() => setManageCategoriesOpen(true)}
                 onManageTags={() => setManageTagsOpen(true)}
                 onClearFilters={() => {
+                  setOffset(0);
                   setSearch("");
                   setFilterCategoryId(null);
                   setFilterTagId(null);
@@ -567,6 +580,12 @@ export default function App() {
                   </Tooltip>
                 </Stack>
 
+                {listError && <Typography role="alert" color="error">{listError}</Typography>}
+                <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                  <Button disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</Button>
+                  <Typography sx={{ alignSelf: "center" }}>Page {Math.floor(offset / pageSize) + 1}</Typography>
+                  <Button disabled={loading || notes.length < pageSize} onClick={() => setOffset(offset + pageSize)}>Next</Button>
+                </Stack>
                 <Stack spacing={1.5}>
                   {notes.length === 0 ? (
                     <Box sx={{ py: 4, textAlign: "center" }}>

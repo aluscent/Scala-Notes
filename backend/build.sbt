@@ -16,6 +16,7 @@ lazy val root = (project in file("."))
     ),
     libraryDependencies ++= Seq(
       guice,
+      "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "com.typesafe.slick" %% "slick" % "3.6.1",
       "com.typesafe.slick" %% "slick-hikaricp" % "3.6.1",
       "com.h2database" % "h2" % "2.4.240",

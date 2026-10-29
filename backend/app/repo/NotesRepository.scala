@@ -12,14 +12,16 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
   import dbs.profile.api.*
   private val notesTables = dbs.tables
 
-  def list(q: Option[String], categoryId: Option[Long], tagId: Option[Long]): Future[Seq[Note]] = {
+  def list(q: Option[String], categoryId: Option[Long], tagId: Option[Long], limit: Int = 50, offset: Int = 0): Future[Seq[Note]] = {
+    require(limit >= 1 && limit <= 100 && offset >= 0, "Invalid pagination")
     val base0 = notesTables.notes
 
     val base1 = q.filter(_.trim.nonEmpty) match {
       case None => base0
       case Some(term) =>
-        val needle = "%" + term.trim.toLowerCase + "%"
-        base0.filter(n => n.title.toLowerCase.like(needle))
+        val needle = "%" + term.trim.toLowerCase(java.util.Locale.ROOT)
+          .replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+        base0.filter(n => n.title.toLowerCase.like(needle, '!') || n.content.toLowerCase.like(needle, '!'))
     }
 
     val base2 = categoryId match {
@@ -38,7 +40,7 @@ final class NotesRepository @Inject() (dbs: DbSupport)(using ec: ExecutionContex
         }
     }
 
-    val notesQ = base3.sortBy(_.updatedAt.desc).result
+    val notesQ = base3.sortBy(n => (n.updatedAt.desc, n.id.desc)).drop(offset).take(limit).result
 
     val action = for {
       noteRows <- notesQ
